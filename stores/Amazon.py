@@ -4,7 +4,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 
 def check_price(driver) -> float:
-    return float(driver.find_element(By.ID, "corePrice_feature_div").text[1:])
+    return float((driver.find_element(By.ID, "corePrice_feature_div").text[1:]).replace(',', ''))
 
 
 def buy_item(driver, username, password):
