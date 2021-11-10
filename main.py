@@ -12,8 +12,8 @@ import rx.operators as ops
 import services.scheduler as SchedulerObs
 from stores.Amazon import AmazonMetadata
 
-USER = 'emmanuelrobles94@gmail.com'
-PASS = 'a pass'
+USER = 'email'
+PASS = 'password'
 
 
 def get_amazon() -> Observable:
