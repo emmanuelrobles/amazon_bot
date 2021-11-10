@@ -8,7 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 
 import models.enums
-from browser.Driver import get_a_driver
+from browser.driver import get_a_driver
 from models.communication import Action
 
 
