@@ -126,7 +126,7 @@ def guard_buy(products: List[ProductOptions]) -> Callable[[WebDriver, AmazonProd
             # confirm
             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'sc-buy-box-ptc-button'))).click()
             # place order
-            # WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'submitOrderButtonId'))).click()
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'submitOrderButtonId'))).click()
         except Exception as e:
             # Couldn't buy return false
             print(e)
