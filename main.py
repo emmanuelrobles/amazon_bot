@@ -4,13 +4,13 @@ from typing import Callable
 from rx import Observable
 from rx.scheduler import ThreadPoolScheduler
 
-import stores.Amazon
-from browser.Driver import get_a_driver
+import stores.amazon
+from browser.driver import get_a_driver
 from models import enums
 from models.communication import Action
 import rx.operators as ops
 import services.scheduler as SchedulerObs
-from stores.Amazon import AmazonMetadata
+from stores.amazon import AmazonMetadata
 
 USER = 'email'
 PASS = 'password'
