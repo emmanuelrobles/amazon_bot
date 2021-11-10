@@ -89,6 +89,7 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
     return rx.merge(*map(create_observable, products))
 
 
+# gets a driver with the credentials
 def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, password: str) -> WebDriver:
     driver = get_a_driver(browser, False)
     driver.get(
@@ -105,50 +106,51 @@ def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, pas
     return driver
 
 
-def guard_buy(products: List[ProductOptions]) -> Callable[[WebDriver, AmazonProductFoundAction], bool]:
-    desire_qty: dict = {}
-    bought_qty: Counter = Counter()
-    for p in products:
-        desire_qty.update({p.url: p.qty})
-
-    def try_buy(driver: WebDriver, action: AmazonProductFoundAction) -> bool:
-        # already bought specified qty
-        if bought_qty[action.options.url] >= action.options.qty:
-            print("Product was bought already")
-            return False
-        # go to the product add to cart url
-        url = action.site_data.add_to_cart_callback()
-        driver.get(url)
-
-        try:
-            # add to cart
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'a-autoid-0'))).click()
-            # confirm
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'sc-buy-box-ptc-button'))).click()
-            # place order
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'submitOrderButtonId'))).click()
-        except Exception as e:
-            # Couldn't buy return false
-            print(e)
-            return False
-
-        bought_qty.update([action.options.url])
-        return True
-
-    return try_buy
-
-
 def init_store(logged_in_driver: WebDriver, products: List[ProductOptions],
                browser: models.enums.BrowsersEnum) -> Observable:
 
+    # guards the buy action, check if the products meets the criteria before
+    def init_guard() -> Callable[[WebDriver, AmazonProductFoundAction], bool]:
+        desire_qty: dict = {}
+        bought_qty: Counter = Counter()
+        for p in products:
+            desire_qty.update({p.url: p.qty})
+
+        #  tries to buy a product
+        def try_buy(driver: WebDriver, action: AmazonProductFoundAction) -> bool:
+            # already bought specified qty
+            if bought_qty[action.options.url] >= action.options.qty:
+                print("Product was bought already")
+                return False
+            # go to the product add to cart url
+            url = action.site_data.add_to_cart_callback()
+            driver.get(url)
+
+            try:
+                # add to cart
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'a-autoid-0'))).click()
+                # confirm
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, 'sc-buy-box-ptc-button'))).click()
+                # place order
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'submitOrderButtonId'))).click()
+            except Exception as e:
+                # Couldn't buy return false
+                print(e)
+                return False
+
+            bought_qty.update([action.options.url])
+            return True
+
+        return try_buy
+
     # init the guard
-    buy = guard_buy(products)
+    buy = init_guard()
 
     # init scrapers
     products_notification = init_scrapers(products, browser)
 
     return products_notification.pipe(
-        # ops.observe_on(scheduler),
         ops.do_action(lambda action: print(action.action_type)),
         ops.map(lambda action: buy(logged_in_driver, action.data))
     )
