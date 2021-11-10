@@ -5,3 +5,7 @@ class BrowsersEnum(Enum):
     FIREFOX = 1
     CHROME = 2
     CHROMIUM = 3
+
+
+class StoresEnum(Enum):
+    AMAZON = 'Amazon'

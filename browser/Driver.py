@@ -1,10 +1,9 @@
 from selenium import webdriver
 
-from models.Browsers import BrowsersEnum
+from models.enums import BrowsersEnum
 
 
-def get_a_driver(browser: BrowsersEnum):
-    is_headless = False
+def get_a_driver(browser: BrowsersEnum, is_headless=True):
     if browser is BrowsersEnum.FIREFOX:
         options = webdriver.FirefoxOptions()
         options.headless = is_headless
@@ -29,4 +28,4 @@ def get_a_driver(browser: BrowsersEnum):
         from webdriver_manager.utils import ChromeType
         service = ChromiumService(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install(),
                                   start_error_message='Couldnt start')
-        return ChromiumDriver(service=service, options=options,browser_name="chromium",vendor_prefix="webkit")
+        return ChromiumDriver(service=service, options=options, browser_name="chromium", vendor_prefix="webkit")
