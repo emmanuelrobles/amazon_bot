@@ -65,12 +65,16 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
                 default_price = get_price_by_id('aod-price-0')
                 best_offer = get_price_by_id('aod-price-1')
 
-                # getting the best price
+                # getting the best price, extremely ugly solution but it works :), TODO rework this later
                 if best_offer is None and default_price is None:
                     return None
-                if best_offer is None or default_price <= best_offer:
+                elif best_offer is not None and default_price is not None:
+                    if default_price <= best_offer:
+                        return AmazonSiteData(default_price, lambda: get_url('a-autoid-2-offer-0'))
+                    return AmazonSiteData(best_offer, lambda: get_url('a-autoid-2-offer-1'))
+                elif best_offer is None:
                     return AmazonSiteData(default_price, lambda: get_url('a-autoid-2-offer-0'))
-                elif default_price is None or default_price > best_offer:
+                elif default_price is None:
                     return AmazonSiteData(best_offer, lambda: get_url('a-autoid-2-offer-1'))
 
             driver.refresh()
