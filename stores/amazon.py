@@ -34,8 +34,10 @@ class AmazonProductFoundAction:
 def init_scrapers(products: List[ProductOptions], browser: models.enums.BrowsersEnum) -> Observable:
     #    get a driver with no auth
     def init_default_driver(url) -> WebDriver:
+        print("creating driver for url: " + url)
         driver = get_a_driver(browser)
         driver.get(url)
+        print("driver created for url: " + url)
         return driver
 
     # get the product data from the site
@@ -100,6 +102,7 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
 
 # gets a driver with the credentials
 def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, password: str) -> WebDriver:
+    print("creating driver with credentials")
     driver = get_a_driver(browser, False)
     driver.get(
         'https://www.amazon.com/ap/signin?openid.pape.max_auth_age=0&openid.return_to=https%3A%2F%2Fwww.amazon.com%2F%3Fref_%3Dnav_signin&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.assoc_handle=usflex&openid.mode=checkid_setup&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0&')
@@ -112,6 +115,7 @@ def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, pas
         EC.presence_of_element_located((By.ID, "ap_password"))).send_keys(password)
 
     driver.find_element(By.ID, 'signInSubmit').click()
+    print("driver successfully created")
     return driver
 
 
