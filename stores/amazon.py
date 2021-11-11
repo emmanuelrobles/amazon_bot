@@ -86,7 +86,12 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
         driver = init_default_driver(product.url)
         return SchedulerObs.init_scheduler(driver, get_product(product))
 
-    return rx.merge(*map(create_observable, products))
+    from rx.scheduler import ThreadPoolScheduler
+    return rx.from_iterable(products, ThreadPoolScheduler())\
+        .pipe(
+            ops.map(create_observable),
+            ops.merge_all()
+        )
 
 
 # gets a driver with the credentials
@@ -106,6 +111,7 @@ def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, pas
     return driver
 
 
+# returns an observable[bool], TODO add a better response type, Action[AmazonProductBought]
 def init_store(logged_in_driver: WebDriver, products: List[ProductOptions],
                browser: models.enums.BrowsersEnum) -> Observable:
 
