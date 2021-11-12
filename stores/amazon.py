@@ -81,8 +81,15 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
 
             driver.refresh()
             metadata = get_metadata()
-            if metadata.price_found <= options.price:
+            if metadata is not None and metadata.price_found <= options.price:
                 return Action("product_found", AmazonProductFoundAction(metadata, options))
+
+            # Logging TODO add it as a side effect
+            if metadata is None:
+                print("not valid offer for: " + options.url)
+            else:
+                print(f'Price too high for item {options.url}, '
+                      f'max price: {options.price}, actual price: {metadata.price_found}')
             return None
 
         return set_driver
