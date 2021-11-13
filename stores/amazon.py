@@ -35,7 +35,7 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
     #    get a driver with no auth
     def init_default_driver(url) -> WebDriver:
         print("creating driver for url: " + url)
-        driver = get_a_driver(browser,False)
+        driver = get_a_driver(browser)
         driver.get(url)
         print("driver created for url: " + url)
         return driver
