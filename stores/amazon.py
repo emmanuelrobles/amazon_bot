@@ -35,7 +35,7 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
     #    get a driver with no auth
     def init_default_driver(url) -> WebDriver:
         print("creating driver for url: " + url)
-        driver = get_a_driver(browser)
+        driver = get_a_driver(browser,False)
         driver.get(url)
         print("driver created for url: " + url)
         return driver
@@ -44,9 +44,9 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
     def get_product(options: ProductOptions) -> Callable[[WebDriver], Optional[Action[AmazonProductFoundAction]]]:
         def set_driver(driver: WebDriver) -> Optional[Action[AmazonProductFoundAction]]:
             def get_metadata():
-                def get_price_by_id(id: str) -> Optional[float]:
+                def get_price_by_id(id: str, timeout=10) -> Optional[float]:
                     try:
-                        price: float = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, id))) \
+                        price: float = WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.ID, id))) \
                             .find_element(By.XPATH, './/span[@class = "a-price"]/span[@class = "a-offscreen"]') \
                             .get_attribute('innerHTML')
                         return float(price[1:].replace(',', ''))
@@ -64,7 +64,7 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
 
                     return build_add_to_cart_url(data['oid'])
 
-                default_price = get_price_by_id('aod-price-0')
+                default_price = get_price_by_id('aod-price-0', 4)
                 best_offer = get_price_by_id('aod-price-1')
 
                 # getting the best price, extremely ugly solution but it works :), TODO rework this later
@@ -96,15 +96,14 @@ def init_scrapers(products: List[ProductOptions], browser: models.enums.Browsers
 
     # schedule the scraper to run with the given options
     def create_observable(product: ProductOptions) -> Observable:
-        driver = init_default_driver(product.url)
-        return SchedulerObs.init_scheduler(driver, get_product(product))
+        return SchedulerObs.init_scheduler(lambda: init_default_driver(product.url,), get_product(product))
 
     from rx.scheduler import ThreadPoolScheduler
-    return rx.from_iterable(products, ThreadPoolScheduler())\
+    return rx.from_iterable(products, ThreadPoolScheduler()) \
         .pipe(
-            ops.map(create_observable),
-            ops.merge_all()
-        )
+        ops.map(create_observable),
+        ops.merge_all()
+    )
 
 
 # gets a driver with the credentials
@@ -129,7 +128,6 @@ def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, pas
 # returns an observable[bool], TODO add a better response type, Action[AmazonProductBought]
 def init_store(logged_in_driver: WebDriver, products: List[ProductOptions],
                browser: models.enums.BrowsersEnum) -> Observable:
-
     # guards the buy action, check if the products meets the criteria before
     def init_guard() -> Callable[[WebDriver, AmazonProductFoundAction], bool]:
         desire_qty: dict = {}
