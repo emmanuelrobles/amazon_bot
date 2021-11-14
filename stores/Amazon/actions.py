@@ -1,5 +1,5 @@
 from models.communication import Action
-from stores.Amazon.Models import AmazonProductFoundAction, AmazonProductNotFoundAction
+from stores.Amazon.models import AmazonProductFoundAction, AmazonProductNotFoundAction
 
 
 def on_product_found(payload: AmazonProductFoundAction) -> Action[AmazonProductFoundAction]:
