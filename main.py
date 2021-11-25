@@ -29,6 +29,9 @@ async def main():
         # ProductOptions('https://www.amazon.com/gp/aod/ajax/ref=auto_load_aod?asin=B083HZGMWZ&pc=dp', 1, 1500),
         # ProductOptions('https://www.amazon.com/gp/aod/ajax/ref=auto_load_aod?asin=B08P3ZN62G&pc=dp', 1, 1000),
         # ProductOptions('https://www.amazon.com/gp/aod/ajax/ref=auto_load_aod?asin=B096L3GLYS&pc=dp', 1, 1500),
+
+        # Doest work when its only one offer? maybe TODO investigate issue
+        # AmazonProduct('B07NS655QM', 1, 20),
         AmazonProduct('B097CMQVF4', 1, 500),
         AmazonProduct('B09C43DLXG', 1, 500),
         AmazonProduct('B098682XKX', 1, 530),

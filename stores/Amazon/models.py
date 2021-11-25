@@ -25,3 +25,19 @@ class AmazonProductNotFoundAction:
     def __init__(self, error_msg: str, product: AmazonProduct):
         self.error_msg = error_msg
         self.product = product
+
+
+class AmazonProductBoughtSuccessAction:
+    def __init__(self, product: AmazonProduct):
+        self.product = product
+
+
+class AmazonProductBoughtErrorAction:
+    def __init__(self, error_msg: str, product: AmazonProduct):
+        self.error_msg = error_msg
+        self.product = product
+
+
+class AmazonProductAllBoughtAction:
+    def __init__(self, product: AmazonProduct):
+        self.product = product

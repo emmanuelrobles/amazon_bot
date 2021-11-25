@@ -75,18 +75,17 @@ def init_scrap(get_html_callback: Callable[[], Callable[[str], str]]) -> Callabl
 
             if metadata is not None:
                 if metadata.price_found <= product.price:
-                    return on_product_found(AmazonProductFoundAction(metadata, product))
+                    return on_product_found(metadata, product)
                 else:
                     return on_product_not_found(
-                        AmazonProductNotFoundAction(
-                            'Price %s is too high, expected price: %s' % (metadata.price_found, product.price),
-                            product))
-            return on_product_not_found(AmazonProductNotFoundAction("Price not found", product))
+                        'Price %s is too high, expected price: %s' % (metadata.price_found, product.price),
+                        product)
+            return on_product_not_found("Price not found", product)
 
         try:
             return get_data()
         except Exception as e:
-            return on_product_not_found(AmazonProductNotFoundAction("Request failed", product))
+            return on_product_not_found("Request failed", product)
 
     return scrap_product
 
@@ -164,6 +163,9 @@ def express_checkout(product_id: str) -> Callable[[str, str, dict], bool]:
             ele_json_data = soup.select_one('#checkout-page-container > script:nth-child(3)')
             # get element with token
             ele_token = soup.find('input', {'name': 'anti-csrftoken-a2z'})
+
+            if ele_token is None:
+                return False
 
             csrf_token = ele_token['value']
             json_data = json.loads(ele_json_data.text)
