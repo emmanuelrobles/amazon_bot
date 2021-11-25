@@ -6,5 +6,5 @@ def on_product_found(payload: AmazonProductFoundAction) -> Action[AmazonProductF
     return Action("amazon_product_found", payload)
 
 
-def on_not_product_found(payload: AmazonProductNotFoundAction) -> Action[AmazonProductNotFoundAction]:
-    return Action("amazon_not_product_found", payload)
+def on_product_not_found(payload: AmazonProductNotFoundAction) -> Action[AmazonProductNotFoundAction]:
+    return Action("amazon_product_not_found", payload)
