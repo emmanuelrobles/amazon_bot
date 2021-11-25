@@ -62,7 +62,6 @@ def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, pas
     return driver
 
 
-# returns an observable[bool], TODO add a better response type, Action[AmazonProductBought]
 def init_store(logged_in_driver: WebDriver, products: List[AmazonProduct]) -> Observable:
     # guards the buy action, check if the products meets the criteria before
     def init_guard() -> Callable[[WebDriver, AmazonProductFoundAction], Action]:
