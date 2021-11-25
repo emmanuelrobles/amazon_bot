@@ -21,6 +21,7 @@ def get_a_driver(browser: BrowsersEnum, is_headless=True):
     if browser is BrowsersEnum.CHROMIUM:
         from selenium.webdriver.chromium.options import ChromiumOptions
         from selenium.webdriver.chromium.webdriver import ChromiumDriver
+        from selenium.webdriver.chromium.webdriver import ChromiumDriver
         options = ChromiumOptions()
         options.headless = is_headless
         from selenium.webdriver.chromium.service import ChromiumService
