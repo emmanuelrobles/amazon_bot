@@ -1,107 +1,37 @@
-import json
 from collections import Counter
-from typing import Optional, Callable, List
+from collections import Counter
+from typing import Callable, List
 
 import rx
-from rx import Observable
 import rx.operators as ops
-from selenium.webdriver.remote.webdriver import WebDriver
-from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import expected_conditions as EC
+from rx import Observable
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-import services.scheduler as SchedulerObs
 
 import models.enums
+import services.scheduler as SchedulerObs
 from browser.driver import get_a_driver
 from models.communication import Action
-from models.product_options import ProductOptions
+from services.helpers import of_type, get_cookies_from_driver
+from stores.Amazon.actions import on_all_products_bought, on_product_bought_success, AmazonActionTypes, \
+    on_product_bought_error
+from stores.Amazon.models import AmazonProductFoundAction, AmazonProduct
+from stores.Amazon.scraper import init_scrap, get_data_using_selenium, get_data_using_request, \
+    try_checkout
 
 
-class AmazonSiteData:
-    def __init__(self, price_found: float, add_to_cart_callback: Callable[[], str]):
-        self.price_found = price_found
-        self.add_to_cart_callback = add_to_cart_callback
-
-
-class AmazonProductFoundAction:
-    def __init__(self, site_data: AmazonSiteData, options: ProductOptions):
-        self.site_data = site_data
-        self.options = options
-
-
-# Send a notification when finds a product with the right price
-def init_scrapers(products: List[ProductOptions], browser: models.enums.BrowsersEnum) -> Observable:
-    #    get a driver with no auth
-    def init_default_driver(url) -> WebDriver:
-        print("creating driver for url: " + url)
-        driver = get_a_driver(browser)
-        driver.get(url)
-        print("driver created for url: " + url)
-        return driver
-
-    # get the product data from the site
-    def get_product(options: ProductOptions) -> Callable[[WebDriver], Optional[Action[AmazonProductFoundAction]]]:
-        def set_driver(driver: WebDriver) -> Optional[Action[AmazonProductFoundAction]]:
-            def get_metadata():
-                def get_price_by_id(id: str, timeout=10) -> Optional[float]:
-                    try:
-                        price: float = WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.ID, id))) \
-                            .find_element(By.XPATH, './/span[@class = "a-price"]/span[@class = "a-offscreen"]') \
-                            .get_attribute('innerHTML')
-                        return float(price[1:].replace(',', ''))
-                    except:
-                        return None
-
-                def get_url(id: str) -> str:
-                    child: WebElement = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, id)))
-                    ele = child.find_element(By.XPATH, './../..')
-                    data = json.loads(ele.get_attribute('data-aod-atc-action'))
-
-                    def build_add_to_cart_url(oid: str):
-                        base_url = 'https://www.amazon.com/gp/aws/cart/add-res.html?Quantity.1=1&OfferListingId.1='
-                        return base_url + oid
-
-                    return build_add_to_cart_url(data['oid'])
-
-                default_price = get_price_by_id('aod-price-0', 4)
-                best_offer = get_price_by_id('aod-price-1')
-
-                # getting the best price, extremely ugly solution but it works :), TODO rework this later
-                if best_offer is None and default_price is None:
-                    return None
-                elif best_offer is not None and default_price is not None:
-                    if default_price <= best_offer:
-                        return AmazonSiteData(default_price, lambda: get_url('a-autoid-2-offer-0'))
-                    return AmazonSiteData(best_offer, lambda: get_url('a-autoid-2-offer-1'))
-                elif best_offer is None:
-                    return AmazonSiteData(default_price, lambda: get_url('a-autoid-2-offer-0'))
-                elif default_price is None:
-                    return AmazonSiteData(best_offer, lambda: get_url('a-autoid-2-offer-1'))
-
-            driver.refresh()
-            metadata = get_metadata()
-            if metadata is not None and metadata.price_found <= options.price:
-                return Action("product_found", AmazonProductFoundAction(metadata, options))
-
-            # Logging TODO add it as a side effect
-            if metadata is None:
-                print("not valid offer for: " + options.url)
-            else:
-                print(f'Price too high for item {options.url}, '
-                      f'max price: {options.price}, actual price: {metadata.price_found}')
-            return None
-
-        return set_driver
-
-    # schedule the scraper to run with the given options
-    def create_observable(product: ProductOptions) -> Observable:
-        return SchedulerObs.init_scheduler(lambda: init_default_driver(product.url,), get_product(product))
-
+def init_scrapers(products: List[AmazonProduct]) -> Observable:
     from rx.scheduler import ThreadPoolScheduler
+    scrap = init_scrap(lambda: get_data_using_request(models.enums.BrowsersEnum.CHROMIUM))
+
+    def map_product(option: AmazonProduct):
+        return SchedulerObs.init_scheduler(lambda: scrap(option), 2.3)
+
     return rx.from_iterable(products, ThreadPoolScheduler()) \
         .pipe(
-        ops.map(create_observable),
+        ops.map(map_product),
         ops.merge_all()
     )
 
@@ -111,7 +41,10 @@ def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, pas
     print("creating driver with credentials")
     driver = get_a_driver(browser, False)
     driver.get(
-        'https://www.amazon.com/ap/signin?openid.pape.max_auth_age=0&openid.return_to=https%3A%2F%2Fwww.amazon.com%2F%3Fref_%3Dnav_signin&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.assoc_handle=usflex&openid.mode=checkid_setup&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0&')
+        'https://www.amazon.com/ap/signin?openid.pape.max_auth_age=0&openid.return_to=https%3A%2F%2Fwww.amazon.com%2F'
+        '%3Fref_%3Dnav_signin&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid'
+        '.assoc_handle=usflex&openid.mode=checkid_setup&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0'
+        '%2Fidentifier_select&openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0&')
     WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.ID, "ap_email"))).send_keys(username)
 
@@ -125,41 +58,35 @@ def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, pas
     return driver
 
 
-# returns an observable[bool], TODO add a better response type, Action[AmazonProductBought]
-def init_store(logged_in_driver: WebDriver, products: List[ProductOptions],
-               browser: models.enums.BrowsersEnum) -> Observable:
+def init_store(logged_in_driver: WebDriver, products: List[AmazonProduct]) -> Observable:
     # guards the buy action, check if the products meets the criteria before
-    def init_guard() -> Callable[[WebDriver, AmazonProductFoundAction], bool]:
+    def init_guard() -> Callable[[WebDriver, AmazonProductFoundAction], Action]:
         desire_qty: dict = {}
         bought_qty: Counter = Counter()
         for p in products:
             desire_qty.update({p.url: p.qty})
 
         #  tries to buy a product
-        def try_buy(driver: WebDriver, action: AmazonProductFoundAction) -> bool:
+        def try_buy(driver: WebDriver, action: AmazonProductFoundAction) -> Action:
             # already bought specified qty
-            if bought_qty[action.options.url] >= action.options.qty:
+            if bought_qty[action.product.url] >= action.product.qty:
                 print("Product was bought already")
-                return False
-            # go to the product add to cart url
-            url = action.site_data.add_to_cart_callback()
-            driver.get(url)
+                return on_all_products_bought(action.product)
 
-            try:
-                # add to cart
-                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'a-autoid-0'))).click()
-                # confirm
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.ID, 'sc-buy-box-ptc-button'))).click()
-                # place order
-                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'submitOrderButtonId'))).click()
-            except Exception as e:
-                # Couldn't buy return false
-                print(e)
-                return False
+            # get the cookies from the login driver
+            cookies = get_cookies_from_driver(driver)
 
-            bought_qty.update([action.options.url])
-            return True
+            # Try to buy the item with express checkout
+            bought = try_checkout(action.product.product_id,
+                                      'njlgprjsskkq',
+                                      action.site_data.offer_id_callback(),
+                                      cookies)
+
+            if bought:
+                bought_qty.update([action.product.url])
+                return on_product_bought_success(action.product)
+
+            return on_product_bought_error('couldnt buy product', action.product)
 
         return try_buy
 
@@ -167,9 +94,19 @@ def init_store(logged_in_driver: WebDriver, products: List[ProductOptions],
     buy = init_guard()
 
     # init scrapers
-    products_notification = init_scrapers(products, browser)
+    products_notification_obs = init_scrapers(products)
 
-    return products_notification.pipe(
-        ops.do_action(lambda action: print(action.action_type)),
-        ops.map(lambda action: buy(logged_in_driver, action.data))
+    def log_action(action: Action):
+        if action.action_type == AmazonActionTypes.product_found:
+            print(f'{action.action_type}: '
+                  f'price {action.payload.site_data.price_found} '
+                  f'url {action.payload.product.url}')
+        else:
+            print(f'{action.payload.error_msg} for product: {action.payload.product.url}')
+
+    return products_notification_obs.pipe(
+        ops.do_action(log_action)).pipe(
+        of_type(AmazonActionTypes.product_found),
+        ops.map(lambda action: buy(logged_in_driver, action.payload)),
+        ops.do_action(lambda action: print(f'{action.action_type}: product {action.payload.product.url}'))
     )
