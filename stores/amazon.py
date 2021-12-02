@@ -1,37 +1,33 @@
-import json
 from collections import Counter
-from typing import Optional, Callable, List
+from collections import Counter
+from typing import Callable, List
 
-import requests
 import rx
-import scheduler
-from rx import Observable
 import rx.operators as ops
-from selenium.webdriver.remote.webdriver import WebDriver
-from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import expected_conditions as EC
+from rx import Observable
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-import services.scheduler as SchedulerObs
 
 import models.enums
+import services.scheduler as SchedulerObs
 from browser.driver import get_a_driver
 from models.communication import Action
-
 from services.helpers import of_type, get_cookies_from_driver
 from stores.Amazon.actions import on_all_products_bought, on_product_bought_success, AmazonActionTypes, \
     on_product_bought_error
 from stores.Amazon.models import AmazonProductFoundAction, AmazonProduct
-from stores.Amazon.scraper import get_data_using_request, init_scrap, get_data_using_selenium, try_add_to_cart_request, \
-    express_checkout, get_add_to_cart_url
+from stores.Amazon.scraper import init_scrap, get_data_using_selenium, get_data_using_request, \
+    try_checkout
 
 
 def init_scrapers(products: List[AmazonProduct]) -> Observable:
     from rx.scheduler import ThreadPoolScheduler
+    scrap = init_scrap(lambda: get_data_using_request(models.enums.BrowsersEnum.CHROMIUM))
 
     def map_product(option: AmazonProduct):
-        scrap = init_scrap(lambda: get_data_using_selenium(models.enums.BrowsersEnum.CHROMIUM))
-        return SchedulerObs.init_scheduler(lambda: scrap(option), 3)
+        return SchedulerObs.init_scheduler(lambda: scrap(option), 2.3)
 
     return rx.from_iterable(products, ThreadPoolScheduler()) \
         .pipe(
@@ -81,39 +77,16 @@ def init_store(logged_in_driver: WebDriver, products: List[AmazonProduct]) -> Ob
             cookies = get_cookies_from_driver(driver)
 
             # Try to buy the item with express checkout
-            bought = express_checkout(action.product.product_id)(
-                'njlgprjsskkq',
-                action.site_data.offer_id_callback(),
-                cookies)
+            bought = try_checkout(action.product.product_id,
+                                      'njlgprjsskkq',
+                                      action.site_data.offer_id_callback(),
+                                      cookies)
 
             if bought:
                 bought_qty.update([action.product.url])
                 return on_product_bought_success(action.product)
 
             return on_product_bought_error('couldnt buy product', action.product)
-
-        # request add to cart with the cookies from the login driver
-        # if not try_add_to_cart_request(action.site_data.offer_id_callback(), cookies):
-        #     return False
-
-        # go to the product add to cart url
-        # url = get_add_to_cart_url(action.site_data.offer_id_callback())
-        # driver.get(url)
-        #
-        # try:
-        #     # add to cart
-        #     WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'a-autoid-0'))).click()
-        #     # confirm
-        #     WebDriverWait(driver, 10).until(
-        #         EC.presence_of_element_located((By.ID, 'sc-buy-box-ptc-button'))).click()
-        #     # place order
-        #     WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'submitOrderButtonId'))).click()
-        # except Exception as e:
-        #     # Couldn't buy return false
-        #     print(e)
-        #     return False
-        #
-        # return True
 
         return try_buy
 
