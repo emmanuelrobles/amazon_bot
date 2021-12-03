@@ -1,4 +1,6 @@
-from typing import Callable
+from typing import Callable, List
+
+from models.enums import BrowsersEnum
 
 
 class AmazonProduct:
@@ -41,3 +43,22 @@ class AmazonProductBoughtErrorAction:
 class AmazonProductAllBoughtAction:
     def __init__(self, product: AmazonProduct):
         self.product = product
+
+
+class AmazonConfig:
+    def __init__(self,
+                 user_name: str,
+                 password: str,
+                 address_id: str,
+                 products: List[AmazonProduct],
+                 scraper_browser: BrowsersEnum,
+                 autobuy_browser: BrowsersEnum,
+                 browser_wait: int):
+
+        self.user_name = user_name
+        self.password = password
+        self.address_id = address_id
+        self.products = products
+        self.scrapper_browser = scraper_browser
+        self.autobuy_browser = autobuy_browser
+        self.browser_wait = browser_wait

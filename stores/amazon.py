@@ -1,4 +1,5 @@
-from collections import Counter
+import asyncio
+import time
 from collections import Counter
 from typing import Callable, List
 
@@ -17,17 +18,16 @@ from models.communication import Action
 from services.helpers import of_type, get_cookies_from_driver
 from stores.Amazon.actions import on_all_products_bought, on_product_bought_success, AmazonActionTypes, \
     on_product_bought_error
-from stores.Amazon.models import AmazonProductFoundAction, AmazonProduct
+from stores.Amazon.models import AmazonProductFoundAction, AmazonProduct, AmazonConfig
 from stores.Amazon.scraper import init_scrap, get_data_using_selenium, get_data_using_request, \
     try_checkout
 
 
-def init_scrapers(products: List[AmazonProduct]) -> Observable:
+def init_scrapers(scraper: Callable[[AmazonProduct], Action], products: List[AmazonProduct]) -> Observable:
     from rx.scheduler import ThreadPoolScheduler
-    scrap = init_scrap(lambda: get_data_using_request(models.enums.BrowsersEnum.CHROMIUM))
 
     def map_product(option: AmazonProduct):
-        return SchedulerObs.init_scheduler(lambda: scrap(option), 2.3)
+        return SchedulerObs.init_scheduler(lambda: scraper(option), 2.3)
 
     return rx.from_iterable(products, ThreadPoolScheduler()) \
         .pipe(
@@ -58,29 +58,25 @@ def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, pas
     return driver
 
 
-def init_store(logged_in_driver: WebDriver, products: List[AmazonProduct]) -> Observable:
+def init_store(amazonConfig: AmazonConfig) -> Observable:
     # guards the buy action, check if the products meets the criteria before
-    def init_guard() -> Callable[[WebDriver, AmazonProductFoundAction], Action]:
+    def init_guard() -> Callable[[dict, AmazonProductFoundAction], Action]:
         desire_qty: dict = {}
         bought_qty: Counter = Counter()
-        for p in products:
+        for p in amazonConfig.products:
             desire_qty.update({p.url: p.qty})
 
         #  tries to buy a product
-        def try_buy(driver: WebDriver, action: AmazonProductFoundAction) -> Action:
+        def try_buy(cookies: dict, action: AmazonProductFoundAction) -> Action:
             # already bought specified qty
             if bought_qty[action.product.url] >= action.product.qty:
-                print("Product was bought already")
                 return on_all_products_bought(action.product)
 
-            # get the cookies from the login driver
-            cookies = get_cookies_from_driver(driver)
-
             # Try to buy the item with express checkout
-            bought = try_checkout(action.product.product_id,
-                                      'njlgprjsskkq',
-                                      action.site_data.offer_id_callback(),
-                                      cookies)
+            bought = asyncio.run(try_checkout(action.product.product_id,
+                                              amazonConfig.address_id,
+                                              action.site_data.offer_id_callback(),
+                                              cookies))
 
             if bought:
                 bought_qty.update([action.product.url])
@@ -90,11 +86,27 @@ def init_store(logged_in_driver: WebDriver, products: List[AmazonProduct]) -> Ob
 
         return try_buy
 
+    # get cookies use to buy products
+    def get_autobuy_cookies():
+        # get a driver with the user logged in
+        driver = init_logged_in_driver(amazonConfig.autobuy_browser, amazonConfig.user_name, amazonConfig.password)
+        # wait for the user
+        time.sleep(amazonConfig.browser_wait)
+        # get the cookies
+        cookies = get_cookies_from_driver(driver)
+        # close the driver instance
+        driver.close()
+        return cookies
+
+    # saving cookies
+    cookies = get_autobuy_cookies()
+
     # init the guard
     buy = init_guard()
 
     # init scrapers
-    products_notification_obs = init_scrapers(products)
+    scraper = init_scrap(get_data_using_request(amazonConfig.scrapper_browser))
+    products_notification_obs = init_scrapers(scraper, amazonConfig.products)
 
     def log_action(action: Action):
         if action.action_type == AmazonActionTypes.product_found:
@@ -107,6 +119,6 @@ def init_store(logged_in_driver: WebDriver, products: List[AmazonProduct]) -> Ob
     return products_notification_obs.pipe(
         ops.do_action(log_action)).pipe(
         of_type(AmazonActionTypes.product_found),
-        ops.map(lambda action: buy(logged_in_driver, action.payload)),
+        ops.map(lambda action: buy(cookies, action.payload)),
         ops.do_action(lambda action: print(f'{action.action_type}: product {action.payload.product.url}'))
     )

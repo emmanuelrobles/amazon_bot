@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 from typing import Optional, Callable, NamedTuple, Tuple
@@ -32,14 +33,11 @@ def __get_base_headers() -> dict:
     }
 
 
-def init_scrap(get_html_callback: Callable[[], Callable[[str], str]]) -> Callable[[AmazonProduct], Action]:
-    # use to refresh in case of captcha
-    get_html = get_html_callback()
-
+def init_scrap(get_html_callback: Callable[[str], str]) -> Callable[[AmazonProduct], Action]:
     def scrap_product(product: AmazonProduct) -> Action:
 
         def get_data() -> Action:
-            data = get_html(product.url)
+            data = get_html_callback(product.url)
             # Passing the source code to BeautifulSoup to create a BeautifulSoup object for it.
             soup = BeautifulSoup(data, features="lxml")
 
@@ -159,8 +157,9 @@ def try_add_to_cart_request(offer_id: str, cookies: dict) -> bool:
     return response.status_code == 200
 
 
-def try_checkout(product_id: str, address_id: str, offer_id: str, cookies: dict) -> bool:
-    def normal_checkout() -> bool:
+async def try_checkout(product_id: str, address_id: str, offer_id: str, cookies: dict) -> bool:
+    # normal checkout, adds to cart and place order
+    async def normal_checkout() -> bool:
         def add_to_cart() -> str:
             url = 'https://www.amazon.com/gp/product/handle-buy-box/ref=dp_start-bbf_1_glance'
             headers = __get_base_headers()
@@ -238,7 +237,8 @@ def try_checkout(product_id: str, address_id: str, offer_id: str, cookies: dict)
 
         return response.status_code == 200
 
-    def express_checkout() -> bool:
+    # amazon has an express checkout that add the item to a temp cart
+    async def express_checkout() -> bool:
         url = f'https://www.amazon.com/checkout/turbo-initiate?ref_=dp_start-bbf_1_glance_buyNow_2-1&referrer=detail' \
               f'&pipelineType=turbo&clientId=retailwebsite&weblab=RCX_CHECKOUT_TURBO_DESKTOP_PRIME_87783' \
               f'&temporaryAddToCart=1&asin.1={product_id}'
@@ -288,5 +288,9 @@ def try_checkout(product_id: str, address_id: str, offer_id: str, cookies: dict)
 
         return try_buy(response.text)
 
-    normal_checkout()
-    return True
+    task_normal_checkout = asyncio.create_task(normal_checkout())
+    task_express_checkout = asyncio.create_task(express_checkout())
+
+    # run both in parallel and hopefully one finish with success, a 200 is not a guarantee that the item was bought
+    await asyncio.gather(task_normal_checkout, task_express_checkout)
+    return task_express_checkout.result() or task_normal_checkout.result()
