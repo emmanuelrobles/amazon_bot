@@ -1,7 +1,7 @@
 import asyncio
 import time
 from collections import Counter
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 import rx
 import rx.operators as ops
@@ -27,7 +27,7 @@ def init_scrapers(scraper: Callable[[AmazonProduct], Action], products: List[Ama
     from rx.scheduler import ThreadPoolScheduler
 
     def map_product(option: AmazonProduct):
-        return SchedulerObs.init_scheduler(lambda: scraper(option), 2.3)
+        return SchedulerObs.init_scheduler(lambda: scraper(option), 1.5)
 
     return rx.from_iterable(products, ThreadPoolScheduler()) \
         .pipe(
@@ -60,16 +60,19 @@ def init_logged_in_driver(browser: models.enums.BrowsersEnum, username: str, pas
 
 def init_store(amazonConfig: AmazonConfig) -> Observable:
     # guards the buy action, check if the products meets the criteria before
-    def init_guard() -> Callable[[dict, AmazonProductFoundAction], Action]:
+    def init_guard() -> Callable[[AmazonProductFoundAction], Action]:
         desire_qty: dict = {}
         bought_qty: Counter = Counter()
         for p in amazonConfig.products:
             desire_qty.update({p.url: p.qty})
 
+        # saving cookies
+        cookies = amazonConfig.logged_in_cookies_callback()
+
         #  tries to buy a product
-        def try_buy(cookies: dict, action: AmazonProductFoundAction) -> Action:
+        def try_buy(action: AmazonProductFoundAction) -> Action:
             # already bought specified qty
-            if bought_qty[action.product.url] >= action.product.qty:
+            if bought_qty[action.product.url] == action.product.qty:
                 return on_all_products_bought(action.product)
 
             # Try to buy the item with express checkout
@@ -86,26 +89,28 @@ def init_store(amazonConfig: AmazonConfig) -> Observable:
 
         return try_buy
 
-    # get cookies use to buy products
-    def get_autobuy_cookies():
-        # get a driver with the user logged in
-        driver = init_logged_in_driver(amazonConfig.autobuy_browser, amazonConfig.user_name, amazonConfig.password)
-        # wait for the user
-        time.sleep(amazonConfig.browser_wait)
-        # get the cookies
-        cookies = get_cookies_from_driver(driver)
-        # close the driver instance
-        driver.close()
-        return cookies
-
-    # saving cookies
-    cookies = get_autobuy_cookies()
-
     # init the guard
     buy = init_guard()
 
+    # proxy generator
+    def get_proxy() -> Callable[[], Optional[dict]]:
+        element_at: Optional[int] = 0
+        if amazonConfig.proxies is None:
+            element_at = None
+
+        # get the next proxy
+        def get_proxy_internal() -> Optional[dict]:
+            nonlocal element_at
+
+            if element_at is None:
+                return None
+            pos = element_at
+            # wrap around proxies
+            element_at = pos + 1 % len(amazonConfig.proxies)
+            return amazonConfig.proxies[pos]
+        return get_proxy_internal
     # init scrapers
-    scraper = init_scrap(get_data_using_request(amazonConfig.scrapper_browser))
+    scraper = init_scrap(get_data_using_request(amazonConfig.scrapper_browser, get_proxy()))
     products_notification_obs = init_scrapers(scraper, amazonConfig.products)
 
     def log_action(action: Action):
@@ -119,6 +124,6 @@ def init_store(amazonConfig: AmazonConfig) -> Observable:
     return products_notification_obs.pipe(
         ops.do_action(log_action)).pipe(
         of_type(AmazonActionTypes.product_found),
-        ops.map(lambda action: buy(cookies, action.payload)),
+        ops.map(lambda action: buy(action.payload)),
         ops.do_action(lambda action: print(f'{action.action_type}: product {action.payload.product.url}'))
     )

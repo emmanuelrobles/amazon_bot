@@ -4,6 +4,7 @@ import time
 from typing import Optional, Callable, NamedTuple, Tuple
 from bs4 import BeautifulSoup
 import requests
+from selenium.webdriver.remote.webdriver import WebDriver
 
 from browser.driver import get_a_driver
 from models.communication import Action
@@ -105,35 +106,39 @@ def get_data_using_selenium(browser: BrowsersEnum) -> Callable[[str], str]:
     return get_page_source
 
 
-def get_data_using_request(browser: BrowsersEnum) -> Callable[[str], str]:
+# get cookies from a driver
+def get_cookies(driver: WebDriver) -> dict:
+    # clear cookies
+    driver.delete_all_cookies()
+
+    driver.get('https://www.amazon.com')
+    # wait to load everything and fix captcha
+    time.sleep(5)
+
+    # get cookies
+    cookies = get_cookies_from_driver(driver)
+
+    # close driver
+    driver.close()
+    return cookies
+
+
+def get_data_using_request(browser: BrowsersEnum, get_proxy_callback: Callable[[], Optional[dict]]) \
+        -> Callable[[str], str]:
     driver = get_a_driver(browser, False)
 
-    # get cookies from a driver
-    def get_cookies() -> dict:
-        # clear cookies
-        driver.delete_all_cookies()
-
-        driver.get('https://www.amazon.com')
-        # wait to load everything and fix captcha
-        time.sleep(5)
-
-        # get cookies
-        cookies = get_cookies_from_driver(driver)
-
-        # close driver
-        driver.close()
-        return cookies
-
-    cookies = get_cookies()
+    cookies = get_cookies(driver)
+    proxies = get_proxy_callback()
 
     def get_page_source(url: str) -> str:
-        nonlocal cookies
+        nonlocal proxies
         headers = __get_base_headers()
         # make request
-        response = requests.get(url, headers=headers, cookies=cookies)
+        response = requests.get(url, headers=headers, cookies=cookies, proxies=proxies)
 
+        # TODO rework this to stop using nonlocal
         if response.status_code == 503:
-            cookies = get_cookies()
+            proxies = get_proxy_callback()
 
         # Extracting the source code of the page.
         return response.text
@@ -157,6 +162,7 @@ def try_add_to_cart_request(offer_id: str, cookies: dict) -> bool:
     return response.status_code == 200
 
 
+# try to check out items using all possible ways
 async def try_checkout(product_id: str, address_id: str, offer_id: str, cookies: dict) -> bool:
     # normal checkout, adds to cart and place order
     async def normal_checkout() -> bool:
@@ -288,9 +294,9 @@ async def try_checkout(product_id: str, address_id: str, offer_id: str, cookies:
 
         return try_buy(response.text)
 
-    task_normal_checkout = asyncio.create_task(normal_checkout())
-    task_express_checkout = asyncio.create_task(express_checkout())
+    # task_express_checkout = await asyncio.create_task(express_checkout())
+    task_normal_checkout = await asyncio.create_task(normal_checkout())
 
     # run both in parallel and hopefully one finish with success, a 200 is not a guarantee that the item was bought
-    await asyncio.gather(task_normal_checkout, task_express_checkout)
-    return task_express_checkout.result() or task_normal_checkout.result()
+    # await asyncio.gather(task_normal_checkout, task_express_checkout)
+    return task_normal_checkout

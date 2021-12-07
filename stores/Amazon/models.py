@@ -1,4 +1,4 @@
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 from models.enums import BrowsersEnum
 
@@ -47,18 +47,14 @@ class AmazonProductAllBoughtAction:
 
 class AmazonConfig:
     def __init__(self,
-                 user_name: str,
-                 password: str,
+                 logged_in_cookies_callback: Callable[[], dict],
                  address_id: str,
                  products: List[AmazonProduct],
                  scraper_browser: BrowsersEnum,
-                 autobuy_browser: BrowsersEnum,
-                 browser_wait: int):
-
-        self.user_name = user_name
-        self.password = password
+                 proxies: Optional[List[dict]]
+                 ):
+        self.logged_in_cookies_callback = logged_in_cookies_callback
         self.address_id = address_id
         self.products = products
         self.scrapper_browser = scraper_browser
-        self.autobuy_browser = autobuy_browser
-        self.browser_wait = browser_wait
+        self.proxies = proxies
