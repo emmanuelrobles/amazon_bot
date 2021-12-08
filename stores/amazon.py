@@ -1,4 +1,5 @@
 import asyncio
+import random
 import time
 from collections import Counter
 from typing import Callable, List, Optional
@@ -27,7 +28,7 @@ def init_scrapers(scraper: Callable[[AmazonProduct], Action], products: List[Ama
     from rx.scheduler import ThreadPoolScheduler
 
     def map_product(option: AmazonProduct):
-        return SchedulerObs.init_scheduler(lambda: scraper(option), 1.5)
+        return SchedulerObs.init_scheduler(lambda: scraper(option), 3.5)
 
     return rx.from_iterable(products, ThreadPoolScheduler()) \
         .pipe(
@@ -109,8 +110,14 @@ def init_store(amazonConfig: AmazonConfig) -> Observable:
             element_at = pos + 1 % len(amazonConfig.proxies)
             return amazonConfig.proxies[pos]
         return get_proxy_internal
+
+    def get_random_proxy() -> Optional[dict]:
+        if amazonConfig.proxies is None:
+            return None
+        return random.choice(amazonConfig.proxies)
+
     # init scrapers
-    scraper = init_scrap(get_data_using_request(amazonConfig.scrapper_browser, get_proxy()))
+    scraper = init_scrap(get_data_using_request(amazonConfig.scrapper_browser, get_random_proxy))
     products_notification_obs = init_scrapers(scraper, amazonConfig.products)
 
     def log_action(action: Action):

@@ -1,6 +1,6 @@
 import json
 import time
-from typing import List
+from typing import List, Optional
 
 from models.enums import BrowsersEnum
 from services.helpers import get_cookies_from_driver
@@ -14,6 +14,17 @@ def amazon_config_from_json(data: dict) -> AmazonConfig:
         for product in data['products']:
             products.append(AmazonProduct(product['id'], product['qty'], product['price']))
         return products
+
+    def get_proxies_from_json() -> Optional[List[dict]]:
+        if 'proxies' not in data:
+            return None
+
+        proxies_json = data['proxies']
+        proxy_credentials = proxies_json['credentials']
+        proxies = []
+        for url in proxies_json['urls']:
+            proxies.append({"https":f'socks5://{proxy_credentials["user"]}:{proxy_credentials["password"]}@{url}:{proxies_json["port"]}'})
+        return proxies
 
     credentials = data['credentials']
 
@@ -35,14 +46,9 @@ def amazon_config_from_json(data: dict) -> AmazonConfig:
         print(json.dumps(cookies))
         return cookies
 
-    proxies = None
-
-    if 'proxies' in data:
-        proxies = data['proxies']
-
     return AmazonConfig(
         get_cookies,
         data['addressId'],
         products_from_json(),
         BrowsersEnum(data['scraperBrowser']),
-        proxies)
+        get_proxies_from_json())
