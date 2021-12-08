@@ -20,7 +20,8 @@ from models.communication import Action
 from services.helpers import of_type, get_cookies_from_driver
 from stores.Amazon.actions import on_all_products_bought, on_product_bought_success, AmazonActionTypes, \
     on_product_bought_error
-from stores.Amazon.models import AmazonProductFoundAction, AmazonProduct, AmazonConfig, RequestData
+from stores.Amazon.models import AmazonProductFoundAction, AmazonProduct, AmazonConfig, RequestData, \
+    AmazonBotDetectedAction
 from stores.Amazon.scraper import init_scrap, get_data_using_selenium, get_data_using_request, \
     try_checkout
 
@@ -94,7 +95,7 @@ def init_store(amazonConfig: AmazonConfig) -> Observable:
     # init the guard
     buy = init_guard()
 
-    request_data = get_cookies_for_proxies(random.choice(amazonConfig.proxies))
+    request_data = get_cookies_for_proxies(amazonConfig.scrapper_browser, random.choice(amazonConfig.proxies))
 
     # init scrapers
     scraper = init_scrap(get_data_using_request(request_data))
@@ -110,30 +111,46 @@ def init_store(amazonConfig: AmazonConfig) -> Observable:
         else:
             print(action.action_type)
 
-    def bind(new_request_data: RequestData):
-        nonlocal request_data
-        request_data.proxies = new_request_data.proxies
-        request_data.cookies = new_request_data.cookies
+    # bot detection methid
+    def on_bot_detected(action: Action):
+        if action.action_type == AmazonActionTypes.bot_detected:
+            nonlocal request_data
+            payload: AmazonBotDetectedAction = action.payload
+
+            # if refreshed already don't do anything
+            if request_data.proxies['https'] != payload.proxies['https']:
+                return
+
+            # get new data
+            new_request_data = get_cookies_for_proxies(amazonConfig.scrapper_browser,
+                                                       random.choice(amazonConfig.proxies))
+
+            # set data
+            request_data.proxies = new_request_data.proxies
+            request_data.cookies = new_request_data.cookies
 
     return products_notification_obs.pipe(
         ops.do_action(log_action),
+        ops.do_action(on_bot_detected),
         of_type(AmazonActionTypes.product_found),
         ops.map(lambda action: buy(action.payload)),
-        ops.do_action(lambda action: print(f'{action.action_type}: product {action.payload.product.url}')),
-        ops.merge(rx.interval(1200).pipe(ops.map(lambda i: bind(get_cookies_for_proxies(random.choice(amazonConfig.proxies))))))
-        )
+        ops.do_action(lambda action: print(f'{action.action_type}: product {action.payload.product.url}'))
+    )
 
 
-def get_cookies_for_proxies(proxy: dict) -> RequestData:
-    # get cookies from a driver
-    from seleniumwire import webdriver
-    options = webdriver.FirefoxOptions()
-    options.headless = True
-    from selenium.webdriver.firefox.service import Service
-    from webdriver_manager.firefox import GeckoDriverManager
-    service = Service(GeckoDriverManager().install())
-    driver = webdriver.Firefox(service=service, options=options, seleniumwire_options={'proxy': proxy})
+# get new cookies with a given proxy
+def get_cookies_for_proxies(browser: models.enums.BrowsersEnum, proxy: dict) -> RequestData:
+    # get a driver with the proxy
+    driver = get_a_driver(browser, False, {'proxy': proxy})
     driver.get("https://www.amazon.com/")
+
+    time.sleep(60)
+
+    # get cookies and headers
     cookies = get_cookies_from_driver(driver)
-    driver.close()
-    return RequestData(cookies, proxy)
+    h = {}
+    driver_headers = driver.requests[-1].headers
+    for header in driver_headers:
+        h[header] = driver_headers[header]
+    driver.quit()
+    return RequestData(h, cookies, proxy)

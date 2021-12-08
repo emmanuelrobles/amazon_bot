@@ -126,7 +126,7 @@ def get_cookies(driver: WebDriver) -> dict:
     cookies = get_cookies_from_driver(driver)
 
     # close driver
-    driver.close()
+    driver.quit()
     return cookies
 
 
@@ -135,7 +135,7 @@ def get_data_using_request(data: RequestData) -> Callable[[str], str]:
     def get_page_source(url: str) -> str:
         headers = __get_base_headers()
         # make request
-        response = requests.get(url, headers=headers, cookies=data.cookies, proxies=data.proxies)
+        response = requests.get(url, headers=data.headers, cookies=data.cookies, proxies=data.proxies)
 
         if response.status_code == 503:
             raise AmazonBotFoundException(data.proxies, url)

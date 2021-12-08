@@ -73,6 +73,7 @@ class AmazonConfig:
 
 
 class RequestData:
-    def __init__(self, cookies: dict, proxies: dict):
+    def __init__(self, headers: dict, cookies: dict, proxies: dict):
         self.cookies = cookies
         self.proxies = proxies
+        self.headers = headers
