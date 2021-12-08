@@ -45,6 +45,12 @@ class AmazonProductAllBoughtAction:
         self.product = product
 
 
+class AmazonBotDetected:
+    def __init__(self, proxies: dict, product: AmazonProduct):
+        self.proxies = proxies
+        self.product = product
+
+
 class AmazonConfig:
     def __init__(self,
                  logged_in_cookies_callback: Callable[[], dict],

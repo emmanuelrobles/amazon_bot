@@ -10,7 +10,8 @@ from browser.driver import get_a_driver
 from models.communication import Action
 from models.enums import BrowsersEnum
 from services.helpers import get_cookies_from_driver
-from stores.Amazon.actions import on_product_not_found, on_product_found
+from stores.Amazon.actions import on_product_not_found, on_product_found, on_bot_detected
+from stores.Amazon.exceptions import AmazonBotFoundException
 from stores.Amazon.models import AmazonSiteData, AmazonProductNotFoundAction, AmazonProductFoundAction, AmazonProduct
 
 
@@ -38,7 +39,12 @@ def init_scrap(get_html_callback: Callable[[str], str]) -> Callable[[AmazonProdu
     def scrap_product(product: AmazonProduct) -> Action:
 
         def get_data() -> Action:
-            data = get_html_callback(product.url)
+            # try to get the html
+            try:
+                data = get_html_callback(product.url)
+            except AmazonBotFoundException as e:
+                return on_bot_detected(e.proxies, product)
+
             # Passing the source code to BeautifulSoup to create a BeautifulSoup object for it.
             soup = BeautifulSoup(data, features="lxml")
 
@@ -128,17 +134,16 @@ def get_data_using_request(browser: BrowsersEnum, get_proxy_callback: Callable[[
     driver = get_a_driver(browser, False)
 
     cookies = get_cookies(driver)
-    proxies = get_proxy_callback()
 
     def get_page_source(url: str) -> str:
-        nonlocal proxies
+        proxies = get_proxy_callback()
+
         headers = __get_base_headers()
         # make request
         response = requests.get(url, headers=headers, cookies=cookies, proxies=proxies)
 
-        # TODO rework this to stop using nonlocal
         if response.status_code == 503:
-            proxies = get_proxy_callback()
+            raise AmazonBotFoundException(proxies, url)
 
         # Extracting the source code of the page.
         return response.text
