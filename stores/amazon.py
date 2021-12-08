@@ -23,7 +23,7 @@ from stores.Amazon.actions import on_all_products_bought, on_product_bought_succ
 from stores.Amazon.models import AmazonProductFoundAction, AmazonProduct, AmazonConfig, RequestData, \
     AmazonBotDetectedAction
 from stores.Amazon.scraper import init_scrap, get_data_using_selenium, get_data_using_request, \
-    try_checkout
+    try_checkout, needs_captcha
 
 
 def init_scrapers(scraper: Callable[[AmazonProduct], Action], products: List[AmazonProduct]) -> Observable:
@@ -138,19 +138,25 @@ def init_store(amazonConfig: AmazonConfig) -> Observable:
     )
 
 
-# get new cookies with a given proxy
+# get new cookies with a given proxy TODO move this to the right place, add timing params
 def get_cookies_for_proxies(browser: models.enums.BrowsersEnum, proxy: dict) -> RequestData:
     # get a driver with the proxy
     driver = get_a_driver(browser, False, {'proxy': proxy})
     driver.get("https://www.amazon.com/")
 
-    time.sleep(60)
+    # if captcha req sleep for 60 sec to allow user to solve captcha TODO refactor all of this method
+    if needs_captcha(driver.page_source):
+        time.sleep(60)
+
+    # making a req to an amazon product and getting the request info
+    driver.get("https://www.amazon.com/gp/aod/ajax/ref=auto_load_aod?asin=B097CMQVF4&pc=dp")
+    req = next(x for x in driver.requests if x.url == 'https://www.amazon.com/gp/aod/ajax/ref=auto_load_aod?asin=B097CMQVF4&pc=dp')
 
     # get cookies and headers
     cookies = get_cookies_from_driver(driver)
-    h = {}
-    driver_headers = driver.requests[-1].headers
+    headers = {}
+    driver_headers = req.headers
     for header in driver_headers:
-        h[header] = driver_headers[header]
+        headers[header] = driver_headers[header]
     driver.quit()
-    return RequestData(h, cookies, proxy)
+    return RequestData(headers, cookies, proxy)

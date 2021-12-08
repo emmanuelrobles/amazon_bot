@@ -5,6 +5,7 @@ from typing import List, Optional
 from models.enums import BrowsersEnum
 from services.helpers import get_cookies_from_driver
 from stores.Amazon.models import AmazonConfig, AmazonProduct
+from stores.Amazon.scraper import needs_captcha
 from stores.amazon import init_logged_in_driver
 
 
@@ -36,8 +37,10 @@ def amazon_config_from_json(data: dict) -> AmazonConfig:
         # get a driver with the user logged in
         driver = init_logged_in_driver(
             BrowsersEnum(data['autoBuyBrowser']), credentials['user'], credentials['password'])
-        # wait for the user
-        time.sleep(data['browserWait'])
+        # check for captcha
+        if needs_captcha(driver.page_source):
+            # wait for the user
+            time.sleep(data['browserWait'])
         # get the cookies
         cookies = get_cookies_from_driver(driver)
         # close the driver instance

@@ -131,7 +131,6 @@ def get_cookies(driver: WebDriver) -> dict:
 
 
 def get_data_using_request(data: RequestData) -> Callable[[str], str]:
-
     def get_page_source(url: str) -> str:
         headers = __get_base_headers()
         # make request
@@ -300,3 +299,10 @@ async def try_checkout(product_id: str, address_id: str, offer_id: str, cookies:
     # run both in parallel and hopefully one finish with success, a 200 is not a guarantee that the item was bought
     # await asyncio.gather(task_normal_checkout, task_express_checkout)
     return task_normal_checkout
+
+
+# check for captcha
+def needs_captcha(html: str) -> bool:
+    soup = BeautifulSoup(html, features="lxml")
+    ele = soup.select_one("#nav-link-accountList-nav-line-1")
+    return ele is None
