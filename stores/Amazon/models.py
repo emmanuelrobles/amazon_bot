@@ -45,10 +45,16 @@ class AmazonProductAllBoughtAction:
         self.product = product
 
 
-class AmazonBotDetected:
+class AmazonBotDetectedAction:
     def __init__(self, proxies: dict, product: AmazonProduct):
         self.proxies = proxies
         self.product = product
+
+
+class AmazonCookiesProxiesRefreshedAction:
+    def __init__(self, cookies: dict, proxies: dict):
+        self.cookies = cookies
+        self.proxies = proxies
 
 
 class AmazonConfig:
@@ -63,4 +69,10 @@ class AmazonConfig:
         self.address_id = address_id
         self.products = products
         self.scrapper_browser = scraper_browser
+        self.proxies = proxies
+
+
+class RequestData:
+    def __init__(self, cookies: dict, proxies: dict):
+        self.cookies = cookies
         self.proxies = proxies

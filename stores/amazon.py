@@ -2,9 +2,10 @@ import asyncio
 import random
 import time
 from collections import Counter
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 import rx
+import rx.subject as subjects
 import rx.operators as ops
 from rx import Observable
 from selenium.webdriver.common.by import By
@@ -19,7 +20,7 @@ from models.communication import Action
 from services.helpers import of_type, get_cookies_from_driver
 from stores.Amazon.actions import on_all_products_bought, on_product_bought_success, AmazonActionTypes, \
     on_product_bought_error
-from stores.Amazon.models import AmazonProductFoundAction, AmazonProduct, AmazonConfig
+from stores.Amazon.models import AmazonProductFoundAction, AmazonProduct, AmazonConfig, RequestData
 from stores.Amazon.scraper import init_scrap, get_data_using_selenium, get_data_using_request, \
     try_checkout
 
@@ -93,31 +94,10 @@ def init_store(amazonConfig: AmazonConfig) -> Observable:
     # init the guard
     buy = init_guard()
 
-    # proxy generator
-    def get_proxy() -> Callable[[], Optional[dict]]:
-        element_at: Optional[int] = 0
-        if amazonConfig.proxies is None:
-            element_at = None
-
-        # get the next proxy
-        def get_proxy_internal() -> Optional[dict]:
-            nonlocal element_at
-
-            if element_at is None:
-                return None
-            pos = element_at
-            # wrap around proxies
-            element_at = pos + 1 % len(amazonConfig.proxies)
-            return amazonConfig.proxies[pos]
-        return get_proxy_internal
-
-    def get_random_proxy() -> Optional[dict]:
-        if amazonConfig.proxies is None:
-            return None
-        return random.choice(amazonConfig.proxies)
+    request_data = get_cookies_for_proxies(random.choice(amazonConfig.proxies))
 
     # init scrapers
-    scraper = init_scrap(get_data_using_request(amazonConfig.scrapper_browser, get_random_proxy))
+    scraper = init_scrap(get_data_using_request(request_data))
     products_notification_obs = init_scrapers(scraper, amazonConfig.products)
 
     def log_action(action: Action):
@@ -125,12 +105,35 @@ def init_store(amazonConfig: AmazonConfig) -> Observable:
             print(f'{action.action_type}: '
                   f'price {action.payload.site_data.price_found} '
                   f'url {action.payload.product.url}')
-        else:
+        elif action.action_type == AmazonActionTypes.product_not_found:
             print(f'{action.payload.error_msg} for product: {action.payload.product.url}')
+        else:
+            print(action.action_type)
+
+    def bind(new_request_data: RequestData):
+        nonlocal request_data
+        request_data.proxies = new_request_data.proxies
+        request_data.cookies = new_request_data.cookies
 
     return products_notification_obs.pipe(
-        ops.do_action(log_action)).pipe(
+        ops.do_action(log_action),
         of_type(AmazonActionTypes.product_found),
         ops.map(lambda action: buy(action.payload)),
-        ops.do_action(lambda action: print(f'{action.action_type}: product {action.payload.product.url}'))
-    )
+        ops.do_action(lambda action: print(f'{action.action_type}: product {action.payload.product.url}')),
+        ops.merge(rx.interval(1200).pipe(ops.map(lambda i: bind(get_cookies_for_proxies(random.choice(amazonConfig.proxies))))))
+        )
+
+
+def get_cookies_for_proxies(proxy: dict) -> RequestData:
+    # get cookies from a driver
+    from seleniumwire import webdriver
+    options = webdriver.FirefoxOptions()
+    options.headless = True
+    from selenium.webdriver.firefox.service import Service
+    from webdriver_manager.firefox import GeckoDriverManager
+    service = Service(GeckoDriverManager().install())
+    driver = webdriver.Firefox(service=service, options=options, seleniumwire_options={'proxy': proxy})
+    driver.get("https://www.amazon.com/")
+    cookies = get_cookies_from_driver(driver)
+    driver.close()
+    return RequestData(cookies, proxy)
