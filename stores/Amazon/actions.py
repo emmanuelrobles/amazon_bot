@@ -3,7 +3,7 @@ from enum import Enum
 from models.communication import Action
 from stores.Amazon.models import AmazonProductFoundAction, AmazonProductNotFoundAction, \
     AmazonProductBoughtSuccessAction, AmazonProductBoughtErrorAction, AmazonProduct, AmazonSiteData, \
-    AmazonProductAllBoughtAction, AmazonBotDetected
+    AmazonProductAllBoughtAction, AmazonBotDetectedAction, AmazonCookiesProxiesRefreshedAction
 
 
 def on_product_found(site_data: AmazonSiteData, product: AmazonProduct) -> Action[AmazonProductFoundAction]:
@@ -26,8 +26,12 @@ def on_all_products_bought(product: AmazonProduct) -> Action[AmazonProductAllBou
     return Action(AmazonActionTypes.all_products_bought, AmazonProductAllBoughtAction(product))
 
 
-def on_bot_detected(proxies: dict, product: AmazonProduct) -> Action[AmazonBotDetected]:
-    return Action(AmazonActionTypes.bot_detected, AmazonBotDetected(proxies, product))
+def on_bot_detected(proxies: dict, product: AmazonProduct) -> Action[AmazonBotDetectedAction]:
+    return Action(AmazonActionTypes.bot_detected, AmazonBotDetectedAction(proxies, product))
+
+
+def on_cookies_proxies_refreshed(cookies: dict, proxies: dict) -> Action[AmazonCookiesProxiesRefreshedAction]:
+    return Action(AmazonActionTypes.cookies_proxies_refreshed, AmazonCookiesProxiesRefreshedAction(cookies, proxies))
 
 
 class AmazonActionTypes(str, Enum):
@@ -37,3 +41,4 @@ class AmazonActionTypes(str, Enum):
     product_bought_error = 'amazon_product_bought_error'
     all_products_bought = 'all_products_bought'
     bot_detected = 'bot_detected'
+    cookies_proxies_refreshed = 'cookies_proxies_refreshed'

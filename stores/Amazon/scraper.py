@@ -12,7 +12,8 @@ from models.enums import BrowsersEnum
 from services.helpers import get_cookies_from_driver
 from stores.Amazon.actions import on_product_not_found, on_product_found, on_bot_detected
 from stores.Amazon.exceptions import AmazonBotFoundException
-from stores.Amazon.models import AmazonSiteData, AmazonProductNotFoundAction, AmazonProductFoundAction, AmazonProduct
+from stores.Amazon.models import AmazonSiteData, AmazonProductNotFoundAction, AmazonProductFoundAction, AmazonProduct, \
+    RequestData
 
 
 def __get_base_headers() -> dict:
@@ -125,25 +126,19 @@ def get_cookies(driver: WebDriver) -> dict:
     cookies = get_cookies_from_driver(driver)
 
     # close driver
-    driver.close()
+    driver.quit()
     return cookies
 
 
-def get_data_using_request(browser: BrowsersEnum, get_proxy_callback: Callable[[], Optional[dict]]) \
-        -> Callable[[str], str]:
-    driver = get_a_driver(browser, False)
-
-    cookies = get_cookies(driver)
+def get_data_using_request(data: RequestData) -> Callable[[str], str]:
 
     def get_page_source(url: str) -> str:
-        proxies = get_proxy_callback()
-
         headers = __get_base_headers()
         # make request
-        response = requests.get(url, headers=headers, cookies=cookies, proxies=proxies)
+        response = requests.get(url, headers=data.headers, cookies=data.cookies, proxies=data.proxies)
 
         if response.status_code == 503:
-            raise AmazonBotFoundException(proxies, url)
+            raise AmazonBotFoundException(data.proxies, url)
 
         # Extracting the source code of the page.
         return response.text

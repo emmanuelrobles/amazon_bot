@@ -41,7 +41,7 @@ def amazon_config_from_json(data: dict) -> AmazonConfig:
         # get the cookies
         cookies = get_cookies_from_driver(driver)
         # close the driver instance
-        driver.close()
+        driver.quit()
         # print cookies
         print(json.dumps(cookies))
         return cookies
