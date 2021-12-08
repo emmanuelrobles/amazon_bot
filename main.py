@@ -1,25 +1,19 @@
 import asyncio
+import json
 
 import stores.amazon
-from models import enums
-from models.product_options import ProductOptions
-
-USER = 'email'
-PASS = 'pass'
+from stores.Amazon.config import amazon_config_from_json
 
 
 async def main():
-    products = [ProductOptions('https://www.amazon.com/uxcell-Thermistors-Resistors-Temperature-Sensors/dp'
-                               '/B07P5Q67RH/ref=sr_1_3?keywords=thermistor&qid=1636465069&sr=8-3&aod=1', 1, 10),
-                ProductOptions('https://www.amazon.com/uxcell-Thermistors-Resistors-Temperature-Sensors/dp'
-                               '/B07P5Q67RH/ref=sr_1_3?keywords=thermistor&qid=1636465069&sr=8-3&aod=1', 1, 10),
-                ProductOptions('https://www.amazon.com/uxcell-Thermistors-Resistors-Temperature-Sensors/dp'
-                               '/B07P5Q67RH/ref=sr_1_3?keywords=thermistor&qid=1636465069&sr=8-3&aod=1', 1, 10)
-                ]
+    with open('config.json', 'r') as config_file:
+        data = config_file.read()
 
-    driver = stores.amazon.init_logged_in_driver(enums.BrowsersEnum.FIREFOX, USER, PASS)
+    config_json = json.loads(data)
 
-    stores.amazon.init_store(driver, products, enums.BrowsersEnum.FIREFOX).subscribe()
+    amazon = amazon_config_from_json(config_json)
+
+    stores.amazon.init_store(amazon).subscribe()
 
 
 loop = asyncio.get_event_loop()
